@@ -18,3 +18,8 @@ out/
 Gemfile*
 settings.gradle
 gradle.properties
+
+.classpath
+.project
+.settings/
+logstash-core-7.10.3.jar

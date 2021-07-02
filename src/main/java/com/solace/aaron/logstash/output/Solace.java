@@ -1,22 +1,12 @@
 package com.solace.aaron.logstash.output;
 
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-
-import javax.json.Json;
-import javax.json.JsonArrayBuilder;
-import javax.json.JsonBuilderFactory;
-import javax.json.JsonObjectBuilder;
-
-import org.logstash.Timestamp;
-
+import co.elastic.logstash.api.Configuration;
+import co.elastic.logstash.api.Context;
+import co.elastic.logstash.api.Event;
+import co.elastic.logstash.api.LogstashPlugin;
+import co.elastic.logstash.api.Output;
+import co.elastic.logstash.api.Password;
+import co.elastic.logstash.api.PluginConfigSpec;
 import com.solacesystems.jcsmp.JCSMPChannelProperties;
 import com.solacesystems.jcsmp.JCSMPErrorResponseException;
 import com.solacesystems.jcsmp.JCSMPErrorResponseSubcodeEx;
@@ -30,14 +20,17 @@ import com.solacesystems.jcsmp.SessionEventArgs;
 import com.solacesystems.jcsmp.SessionEventHandler;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-
-import co.elastic.logstash.api.Configuration;
-import co.elastic.logstash.api.Context;
-import co.elastic.logstash.api.Event;
-import co.elastic.logstash.api.LogstashPlugin;
-import co.elastic.logstash.api.Output;
-import co.elastic.logstash.api.Password;
-import co.elastic.logstash.api.PluginConfigSpec;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import javax.json.Json;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonBuilderFactory;
+import javax.json.JsonObjectBuilder;
+import org.logstash.Timestamp;
 
 // class name must match plugin name
 @LogstashPlugin(name = "solace")
@@ -56,8 +49,6 @@ public class Solace implements Output {
     
     private final String id;
     private final Configuration config;
-    private String prefix;
-    private PrintStream printer;
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile boolean stopped = false;
     
@@ -65,7 +56,8 @@ public class Solace implements Output {
     private JCSMPSession session;
     private final XMLMessageProducer producer;
     private StringBuilder sb = new StringBuilder();
-    private final SessionEventHandler asdf = new SessionEventHandler() {
+    
+    private final SessionEventHandler sessionEventHandler = new SessionEventHandler() {
         @Override
         public void handleEvent(SessionEventArgs event) {
             System.out.printf("### Received a Session event: %s%n",event);
@@ -94,11 +86,7 @@ public class Solace implements Output {
     
 
     // all plugins must provide a constructor that accepts id, Configuration, and Context
-    public Solace(final String id, final Configuration configuration, final Context context) throws JCSMPException {
-        this(id, configuration, context, System.out);
-    }
-
-    Solace(final String id, final Configuration config, final Context context, OutputStream targetStream) throws JCSMPException {
+    public Solace(final String id, final Configuration config, final Context context) throws JCSMPException {
         // constructors should validate configuration options
         this.id = id;
         this.config = config;
@@ -109,8 +97,6 @@ public class Solace implements Output {
             sb.append(String.format("%s, ",key));
         }
         System.out.println("AARON config: "+sb.toString());
-        
-        printer = new PrintStream(targetStream);
         
         final JCSMPProperties properties = new JCSMPProperties();
         properties.setProperty(JCSMPProperties.HOST, config.get(HOST_CONFIG));          // host:port
@@ -124,8 +110,8 @@ public class Solace implements Output {
         channelProps.setConnectRetriesPerHost(5);  // recommended settings
         // https://docs.solace.com/Solace-PubSub-Messaging-APIs/API-Developer-Guide/Configuring-Connection-T.htm
         properties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES,channelProps);
-        session = JCSMPFactory.onlyInstance().createSession(properties,null,asdf);
-        session.setProperty(JCSMPProperties.CLIENT_NAME,"logstash_"+session.getProperty(JCSMPProperties.CLIENT_NAME));
+        session = JCSMPFactory.onlyInstance().createSession(properties,null,sessionEventHandler);
+        session.setProperty(JCSMPProperties.CLIENT_NAME,"logstash_output_"+session.getProperty(JCSMPProperties.CLIENT_NAME));
         session.connect();
         producer = session.getMessageProducer(pubHandler);
     }
@@ -177,41 +163,56 @@ public class Solace implements Output {
  */              
 
  
+                
+                Object t = event.getMetadata().get("solace-topic");
+                if (t != null) {
+                    System.out.println("topic metadata is type "+t.getClass().getName());
+                }
 
                 
                 JsonObjectBuilder jsonBuilder = Json.createObjectBuilder();
-                for (String key : event.getData().keySet()) {
-                    if (event.getField(key) instanceof String) {  // most common
-                        jsonBuilder.add(key,(String)event.getField(key));
-                    } else if (event.getField(key) instanceof java.lang.Long) {
-                        jsonBuilder.add(key,(Long)event.getField(key));
-                    } else if (event.getField(key) instanceof java.lang.Double) {
-                        jsonBuilder.add(key,(Double)event.getField(key));                        
-                    } else if (event.getField(key) instanceof java.lang.Boolean) {
-                        jsonBuilder.add(key,(Boolean)event.getField(key));
-                    } else if (event.getField(key) instanceof org.logstash.Timestamp) {
-                        Timestamp ts = (Timestamp)event.getField(key);
-                        jsonBuilder.add(key,event.getField(key).toString());
-                    } else if (event.getField(key) instanceof java.util.ArrayList) {
-                        ArrayList<?> list = (ArrayList<?>)event.getField(key);
+                
+                StringBuilder sb = new StringBuilder();
+                for (String key : event.getMetadata().keySet()) {
+                    sb.append(key).append(':').append(event.getMetadata().get(key)).append(", ");
+                }
+                jsonBuilder.add("theMetadata", sb.toString());
+                
+                Map<String,Object> map = event.getData();
+                for (String key : map.keySet()) {
+                    Object val = event.getField(key);
+                    if (val instanceof String) {  // most common
+                        jsonBuilder.add(key,(String)val);
+                    } else if (val instanceof java.lang.Long) {
+                        jsonBuilder.add(key,(Long)val);
+                    } else if (val instanceof java.lang.Double) {
+                        jsonBuilder.add(key,(Double)val);                        
+                    } else if (val instanceof java.lang.Boolean) {
+                        jsonBuilder.add(key,(Boolean)val);
+                    } else if (val instanceof org.logstash.Timestamp) {
+                        Timestamp ts = (Timestamp)val;
+                        jsonBuilder.add(key,ts.toString());
+                    } else if (val instanceof java.util.ArrayList) {
+                        ArrayList<?> list = (ArrayList<?>)val;
                         JsonArrayBuilder jab = Json.createArrayBuilder();
                         for (Object o : list) {
                             jab.add(o.toString());  // hopefully they're strings, b/c we have no idea
                         }
                         jsonBuilder.add(key,jab);
                     } else {
-                        System.out.println("AARON found a non-expected type! "+key+": "+event.getField(key));
-                        jsonBuilder.add(key,String.format("%s (%s)",event.getField(key),event.getField(key).getClass().getName()));
+                        System.out.println("AARON found a non-expected type! "+key+": "+val+": "+(val==null?"null":val.getClass().getName()));
+                        //jsonBuilder.add(key,String.format("%s (%s)",val,val.getClass().getName()));
                     }
                 }
-                
+                JsonObjectBuilder job = Json.createObjectBuilder().add("nestedString", "here I am");
+                jsonBuilder.add("nested", job);
                 
                 //message.setText(sb.toString()+"                                "+jsonBuilder.build().toString()+"     "+sb.toString());
                 message.setText(jsonBuilder.build().toString());
                 //message.setText(event.toJson());
                 String topic = config.get(TOPIC_CONFIG);
-                if (event.includes("[@metadata][topic]")) {
-                    topic += "/" +event.getMetadata().get("topic");
+                if (event.includes("[@metadata][solace-topic]")) {
+                    topic += "/" +event.getMetadata().get("solace-topic");
                     //System.out.println("AARON metadata includes topic!");
                 }
                 // if (event.getField("solace-topic") != null) {
