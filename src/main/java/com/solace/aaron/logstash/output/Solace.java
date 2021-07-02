@@ -3,9 +3,11 @@ package com.solace.aaron.logstash.output;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import javax.json.Json;
@@ -34,16 +36,26 @@ import co.elastic.logstash.api.Context;
 import co.elastic.logstash.api.Event;
 import co.elastic.logstash.api.LogstashPlugin;
 import co.elastic.logstash.api.Output;
+import co.elastic.logstash.api.Password;
 import co.elastic.logstash.api.PluginConfigSpec;
 
 // class name must match plugin name
 @LogstashPlugin(name = "solace")
 public class Solace implements Output {
 
-    public static final PluginConfigSpec<String> PREFIX_CONFIG = PluginConfigSpec.stringSetting("prefix", " > ");
+    //public static final PluginConfigSpec<String> PREFIX_CONFIG = PluginConfigSpec.stringSetting("prefix", " > ");
+
+    public static final PluginConfigSpec<String> HOST_CONFIG = PluginConfigSpec.stringSetting("host", "localhost");
+    public static final PluginConfigSpec<String> VPN_CONFIG = PluginConfigSpec.stringSetting("vpn", "default");
+    public static final PluginConfigSpec<String> USERNAME_CONFIG = PluginConfigSpec.stringSetting("username", "default");
+    public static final PluginConfigSpec<Password> PASSWORD_CONFIG = PluginConfigSpec.passwordSetting("password", "default", false, false);
+
+    public static final PluginConfigSpec<String> TOPIC_CONFIG = PluginConfigSpec.stringSetting("topic", "#logstash");
+    public static final PluginConfigSpec<String> TOPIC_PREFIX_CONFIG = PluginConfigSpec.stringSetting("topic-prefix", "#logstash");
 
     
     private final String id;
+    private final Configuration config;
     private String prefix;
     private PrintStream printer;
     private final CountDownLatch done = new CountDownLatch(1);
@@ -89,7 +101,8 @@ public class Solace implements Output {
     Solace(final String id, final Configuration config, final Context context, OutputStream targetStream) throws JCSMPException {
         // constructors should validate configuration options
         this.id = id;
-        prefix = config.get(PREFIX_CONFIG);
+        this.config = config;
+        //prefix = config.get(PREFIX_CONFIG);
         
         for (String key : config.allKeys()) {
             //sb.append(String.format("%s:%s, ",key,config.get(key)));
@@ -100,9 +113,10 @@ public class Solace implements Output {
         printer = new PrintStream(targetStream);
         
         final JCSMPProperties properties = new JCSMPProperties();
-        properties.setProperty(JCSMPProperties.HOST, "192.168.42.35");          // host:port
-        properties.setProperty(JCSMPProperties.VPN_NAME,  "default");     // message-vpn
-        properties.setProperty(JCSMPProperties.USERNAME, "default");      // client-username
+        properties.setProperty(JCSMPProperties.HOST, config.get(HOST_CONFIG));          // host:port
+        properties.setProperty(JCSMPProperties.VPN_NAME, config.get(VPN_CONFIG));     // message-vpn
+        properties.setProperty(JCSMPProperties.USERNAME, config.get(USERNAME_CONFIG));      // client-username
+        properties.setProperty(JCSMPProperties.PASSWORD, config.get(PASSWORD_CONFIG).getPassword());      // password
         properties.setProperty(JCSMPProperties.GENERATE_SEQUENCE_NUMBERS,true);  // why not?
         properties.setProperty(JCSMPProperties.APPLICATION_DESCRIPTION,"Logstash publisher");
         JCSMPChannelProperties channelProps = new JCSMPChannelProperties();
@@ -137,14 +151,17 @@ public class Solace implements Output {
         return Type.NUMBER;
     }
     
+    private void parseMap(Map<String,Object> map, JsonObjectBuilder jab) {
+
+    }
 
     @Override
     public void output(final Collection<Event> events) {
         TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-        Iterator<Event> z = events.iterator();
+        Iterator<Event> iter = events.iterator();
         try {
-            while (z.hasNext() && !stopped) {
-                Event event = z.next();
+            while (iter.hasNext() && !stopped) {
+                Event event = iter.next();
                 //String s = prefix + z.next();
                 // String s = prefix + event.toString();
                 // printer.println(s);
@@ -157,7 +174,11 @@ public class Solace implements Output {
                         sb.append(' ');
                     }
                 }
- */                
+ */              
+
+ 
+
+                
                 JsonObjectBuilder jsonBuilder = Json.createObjectBuilder();
                 for (String key : event.getData().keySet()) {
                     if (event.getField(key) instanceof String) {  // most common
@@ -170,7 +191,6 @@ public class Solace implements Output {
                         jsonBuilder.add(key,(Boolean)event.getField(key));
                     } else if (event.getField(key) instanceof org.logstash.Timestamp) {
                         Timestamp ts = (Timestamp)event.getField(key);
-                        message.setSenderTimestamp(ts.toEpochMilli());
                         jsonBuilder.add(key,event.getField(key).toString());
                     } else if (event.getField(key) instanceof java.util.ArrayList) {
                         ArrayList<?> list = (ArrayList<?>)event.getField(key);
@@ -180,7 +200,7 @@ public class Solace implements Output {
                         }
                         jsonBuilder.add(key,jab);
                     } else {
-                        System.out.println("AARON found a non-expected type!");
+                        System.out.println("AARON found a non-expected type! "+key+": "+event.getField(key));
                         jsonBuilder.add(key,String.format("%s (%s)",event.getField(key),event.getField(key).getClass().getName()));
                     }
                 }
@@ -188,10 +208,16 @@ public class Solace implements Output {
                 
                 //message.setText(sb.toString()+"                                "+jsonBuilder.build().toString()+"     "+sb.toString());
                 message.setText(jsonBuilder.build().toString());
-                String topic = "#logstash/"+event.getField("topic");
+                //message.setText(event.toJson());
+                String topic = config.get(TOPIC_CONFIG);
+                if (event.includes("[@metadata][topic]")) {
+                    topic += "/" +event.getMetadata().get("topic");
+                    //System.out.println("AARON metadata includes topic!");
+                }
                 // if (event.getField("solace-topic") != null) {
                 //     topic = event.getField("solace-topic").toString();
                 // }
+
                 message.setSenderTimestamp(event.getEventTimestamp().toEpochMilli());
                 
                 
@@ -248,7 +274,7 @@ public class Solace implements Output {
     @Override
     public Collection<PluginConfigSpec<?>> configSchema() {
         // should return a list of all configuration options for this plugin
-        return Collections.singletonList(PREFIX_CONFIG);
+        return Arrays.asList(HOST_CONFIG,VPN_CONFIG,USERNAME_CONFIG,PASSWORD_CONFIG,TOPIC_CONFIG,TOPIC_PREFIX_CONFIG);
     }
 
     @Override
