@@ -21,14 +21,13 @@ import com.solacesystems.jcsmp.SessionEventHandler;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import javax.json.Json;
 import javax.json.JsonArrayBuilder;
-import javax.json.JsonBuilderFactory;
 import javax.json.JsonObjectBuilder;
 import org.logstash.Timestamp;
 
@@ -46,13 +45,23 @@ public class Solace implements Output {
     public static final PluginConfigSpec<String> TOPIC_CONFIG = PluginConfigSpec.stringSetting("topic", "#logstash");
     public static final PluginConfigSpec<String> TOPIC_PREFIX_CONFIG = PluginConfigSpec.stringSetting("topic-prefix", "#logstash");
 
+    public static final List<PluginConfigSpec<?>> CONFIG_OPTIONS = new ArrayList<>();
+    static {
+        CONFIG_OPTIONS.add(HOST_CONFIG);
+        CONFIG_OPTIONS.add(VPN_CONFIG);
+        CONFIG_OPTIONS.add(USERNAME_CONFIG);
+        CONFIG_OPTIONS.add(PASSWORD_CONFIG);
+        CONFIG_OPTIONS.add(TOPIC_CONFIG);
+        CONFIG_OPTIONS.add(TOPIC_PREFIX_CONFIG);
+    }
+
     
     private final String id;
     private final Configuration config;
     private final CountDownLatch done = new CountDownLatch(1);
     private volatile boolean stopped = false;
     
-    private final JsonBuilderFactory factory = Json.createBuilderFactory(null);
+    //private final JsonBuilderFactory factory = Json.createBuilderFactory(null);
     private JCSMPSession session;
     private final XMLMessageProducer producer;
     private StringBuilder sb = new StringBuilder();
@@ -117,14 +126,14 @@ public class Solace implements Output {
     }
     
     
-    private enum Type {
+/*     private enum Type {
         NUMBER,
         STRING;
     }
-    
+ */    
 //    private static Map<String,Map<String,Type>> asdf = new ConcurrentHashMap<>();
     
-    private static Type getType(Object value) {
+/*     private static Type getType(Object value) {
         try {
             long l = Long.parseLong(value.toString());
         } catch (NumberFormatException e) {
@@ -140,7 +149,7 @@ public class Solace implements Output {
     private void parseMap(Map<String,Object> map, JsonObjectBuilder jab) {
 
     }
-
+ */
     @Override
     public void output(final Collection<Event> events) {
         TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
@@ -148,27 +157,6 @@ public class Solace implements Output {
         try {
             while (iter.hasNext() && !stopped) {
                 Event event = iter.next();
-                //String s = prefix + z.next();
-                // String s = prefix + event.toString();
-                // printer.println(s);
-                
-/*                 StringBuilder sb = new StringBuilder();
-                for (String key : event.getData().keySet()) {
-                    sb.append(String.format("%s=%s               ",key,event.getField(key)));
-                    int padding = sb.length() % 16;
-                    for (int i=0;i<16-padding;i++) {
-                        sb.append(' ');
-                    }
-                }
- */              
-
- 
-                
-                Object t = event.getMetadata().get("solace-topic");
-                if (t != null) {
-                    System.out.println("topic metadata is type "+t.getClass().getName());
-                }
-
                 
                 JsonObjectBuilder jsonBuilder = Json.createObjectBuilder();
                 
@@ -186,7 +174,7 @@ public class Solace implements Output {
                     } else if (val instanceof java.lang.Long) {
                         jsonBuilder.add(key,(Long)val);
                     } else if (val instanceof java.lang.Double) {
-                        jsonBuilder.add(key,(Double)val);                        
+                        jsonBuilder.add(key,(Double)val);
                     } else if (val instanceof java.lang.Boolean) {
                         jsonBuilder.add(key,(Boolean)val);
                     } else if (val instanceof org.logstash.Timestamp) {
@@ -275,7 +263,7 @@ public class Solace implements Output {
     @Override
     public Collection<PluginConfigSpec<?>> configSchema() {
         // should return a list of all configuration options for this plugin
-        return Arrays.asList(HOST_CONFIG,VPN_CONFIG,USERNAME_CONFIG,PASSWORD_CONFIG,TOPIC_CONFIG,TOPIC_PREFIX_CONFIG);
+        return CONFIG_OPTIONS;
     }
 
     @Override
