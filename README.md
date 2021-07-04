@@ -10,7 +10,10 @@ To take advantage of Solace's dynamic hierarchical topic structure, you'll proba
 ./gradlew clean gem
 ```
 
-Then use the `logstash-plugin` utility in your Logstash distribution to import the generated gem file.
+Then use the `logstash-plugin` utility in your Logstash distribution to import the generated gem file. Something like:
+```
+bin/logstash-plugin install --no-verify --local /home/alee/logstash-output-solace-0.0.3.gem
+```
 
 ## Example config:
 
