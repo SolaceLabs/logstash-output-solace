@@ -1,9 +1,6 @@
-# Logstash Java Plugin
+# Logstash Output Plugin to Solace
 
-[![Travis Build Status](https://travis-ci.com/logstash-plugins/logstash-output-java_output_example.svg)](https://travis-ci.com/logstash-plugins/logstash-output-java_output_example)
+A starter project, work-in-progress, for reading data off Solace PubSub+ event broker, and injecting into Logstash.  It is based on https://github.com/logstash-plugins/logstash-output-java_output_example and https://www.elastic.co/guide/en/logstash/current/java-output-plugin.html.
 
-This is a Java plugin for [Logstash](https://github.com/elastic/logstash).
 
-It is fully free and fully open source. The license is Apache 2.0, meaning you are free to use it however you want.
-
-The documentation for Logstash Java plugins is available [here](https://www.elastic.co/guide/en/logstash/6.7/contributing-java-plugin.html).
+To take advantage of Solace's dynamic hierarchical topic structure, you'll probably want to edit the `Solace.java` file to include whatever custom pieces of Logstash event metadata you want included in the topic.

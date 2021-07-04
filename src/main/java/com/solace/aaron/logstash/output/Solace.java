@@ -152,11 +152,12 @@ public class Solace implements Output {
  */
     @Override
     public void output(final Collection<Event> events) {
-        TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+        TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);  // can reuse later
         Iterator<Event> iter = events.iterator();
         try {
             while (iter.hasNext() && !stopped) {
                 Event event = iter.next();
+                // here is where we have whatevver custom logic we want to build outbound Solace messages from our Logstash event
                 
                 JsonObjectBuilder jsonBuilder = Json.createObjectBuilder();
                 
@@ -256,7 +257,6 @@ public class Solace implements Output {
 
     @Override
     public void awaitStop() throws InterruptedException {
-        session.closeSession();
         done.await();
     }
 
