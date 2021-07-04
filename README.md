@@ -36,16 +36,7 @@ output {
     - N.B. if Logstash event @metadata contains "sol-topic" then that topic will be appended to this value.
 
 
-### Logstash Event Metadata
+### Solace message
 
-The following @metadata fields will be populated by the plugin:
-
-- `solace-topic`: the Destination the message was published to
-- `solace-delivery-mode`: the message's DeliveryMode, either "DIRECT" or "PERSISTENT"
-- `solace-application-message-id`: (optional) if the message's Application Message ID (aka JMS Message ID) is populated
-- `solace-application-message-type`: (optional) if the message's Application Message Type (aka JMS Message Type) is configured
-- `solace-reply-to`: (optional) if the message's reply-to is configured
-- `solace-correlation-id`: (optional) if the message's Correlation ID is configured
-- `solace-sequence-number`: (optional) if the message's Long sequence number is set
-- `@timestamp`: the Logstash event's timestamp will be updated with `msg.getSenderTimestamp()` if populated
-
+As of right now, the payload of the message will be a JSON object, which parses through the contents of the Logstash event and puts them in the object.  Obviously you'd probably want to change this behaviour, based on the type
+of message you have.  Same with the published topic... add some custom code to publish on useful dynamic hierarchical Solace topics (e.g. `#LOG/<host>/<vpn>>/<severity>/pid` or something).
