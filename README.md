@@ -1,4 +1,4 @@
-# Logstash Output Plugin to Solace
+# Logstash Output Plugin for Solace
 
 A starter project, work-in-progress, for taking events out of Logstash and publishing as messages onto a Solace PubSub+ event broker.  It is based on https://github.com/logstash-plugins/logstash-output-java_output_example and https://www.elastic.co/guide/en/logstash/current/java-output-plugin.html.
 
@@ -42,4 +42,9 @@ output {
 ### Solace message
 
 As of right now, the payload of the message will be a JSON object, which parses through the contents of the Logstash event and puts them in the object.  Obviously you'd probably want to change this behaviour, based on the type
-of message you have.  Same with the published topic... add some custom code to publish on useful dynamic hierarchical Solace topics (e.g. `#LOG/<host>/<vpn>>/<severity>/pid` or something).
+of message you have.  Same with the published topic... add some custom code to publish on useful dynamic hierarchical Solace topics (e.g. `#LOG/<host>/<vpn>/<severity>/pid` or something).
+
+## Logstash API API
+
+Useful reference for coding.
+https://github.com/elastic/logstash/tree/master/logstash-core/src/main/java/co/elastic/logstash/api
