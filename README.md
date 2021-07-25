@@ -1,3 +1,5 @@
+#### N.B. Work in progress... not production quality yet
+
 # Logstash Output Plugin for Solace
 
 A starter project, work-in-progress, for taking events out of Logstash and publishing as messages onto a Solace PubSub+ event broker.  It is based on https://github.com/logstash-plugins/logstash-output-java_output_example and https://www.elastic.co/guide/en/logstash/current/java-output-plugin.html.
