@@ -211,7 +211,7 @@ public class Solace implements Output {
                 message.setSenderTimestamp(event.getEventTimestamp().toEpochMilli());
                 
                 
-                
+                // This code below builds a custom topic for publishing when Logstash is configured to receive Solace broker logs via Syslog                
 /*                if (event.getField("scope").equals("SYSTEM")) {
                     topic = String.format("logstash/%s/SYSTEM/%s/%s",
                         event.getField("severity_label"),
