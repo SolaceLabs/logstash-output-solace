@@ -1,4 +1,4 @@
-package com.solace.aaron.logstash.output;
+package com.solace.aa.logstash.output;
 
 import co.elastic.logstash.api.Configuration;
 import co.elastic.logstash.api.Context;
@@ -63,7 +63,7 @@ public class Solace implements Output {
     
     //private final JsonBuilderFactory factory = Json.createBuilderFactory(null);
     private JCSMPSession session;
-    private final XMLMessageProducer producer;
+    //private final XMLMessageProducer producer;
     private StringBuilder sb = new StringBuilder();
     
     private final SessionEventHandler sessionEventHandler = new SessionEventHandler() {
@@ -115,14 +115,12 @@ public class Solace implements Output {
         properties.setProperty(JCSMPProperties.GENERATE_SEQUENCE_NUMBERS,true);  // why not?
         properties.setProperty(JCSMPProperties.APPLICATION_DESCRIPTION,"Logstash publisher");
         JCSMPChannelProperties channelProps = new JCSMPChannelProperties();
-        channelProps.setReconnectRetries(20);      // recommended settings
+        channelProps.setReconnectRetries(-1);      // unlimited retries
         channelProps.setConnectRetriesPerHost(5);  // recommended settings
         // https://docs.solace.com/Solace-PubSub-Messaging-APIs/API-Developer-Guide/Configuring-Connection-T.htm
         properties.setProperty(JCSMPProperties.CLIENT_CHANNEL_PROPERTIES,channelProps);
         session = JCSMPFactory.onlyInstance().createSession(properties,null,sessionEventHandler);
         session.setProperty(JCSMPProperties.CLIENT_NAME,"logstash_output_"+session.getProperty(JCSMPProperties.CLIENT_NAME));
-        session.connect();
-        producer = session.getMessageProducer(pubHandler);
     }
     
     
@@ -155,6 +153,8 @@ public class Solace implements Output {
         TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);  // can reuse later
         Iterator<Event> iter = events.iterator();
         try {
+            session.connect();
+            final XMLMessageProducer producer = session.getMessageProducer(pubHandler);
             while (iter.hasNext() && !stopped) {
                 Event event = iter.next();
                 // here is where we have whatevver custom logic we want to build outbound Solace messages from our Logstash event
