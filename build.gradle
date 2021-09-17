@@ -8,7 +8,7 @@ apply from: LOGSTASH_CORE_PATH + "/../rubyUtils.gradle"
 // ===========================================================================
 // plugin info
 // ===========================================================================
-group                      'com.solace.aaron.logstash.output' // must match the package of the main plugin class
+group                      'com.solace.aa.logstash.output' // must match the package of the main plugin class
 version                    "${file("VERSION").text.trim()}" // read from required VERSION file
 description                = "Solace Java output implementation"
 pluginInfo.licenses        = ['Apache-2.0'] // list of SPDX license IDs
@@ -18,7 +18,9 @@ pluginInfo.email           = ['aaron-613 @ github']
 pluginInfo.homepage        = "https://solace.community"
 pluginInfo.pluginType      = "output"
 pluginInfo.pluginClass     = "Solace"
+//pluginInfo.pluginClass     = "SolaceSyslogRepub"
 pluginInfo.pluginName      = "solace" // must match the @LogstashPlugin annotation in the main plugin class
+//pluginInfo.pluginName      = "solace_syslog_repub" // must match the @LogstashPlugin annotation in the main plugin class
 // ===========================================================================
 
 sourceCompatibility = 1.8

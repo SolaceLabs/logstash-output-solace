@@ -43,7 +43,9 @@ public class Solace implements Output {
     public static final PluginConfigSpec<Password> PASSWORD_CONFIG = PluginConfigSpec.passwordSetting("password", "default", false, false);
 
     public static final PluginConfigSpec<String> TOPIC_CONFIG = PluginConfigSpec.stringSetting("topic", "#logstash");
-    public static final PluginConfigSpec<String> TOPIC_PREFIX_CONFIG = PluginConfigSpec.stringSetting("topic-prefix", "#logstash");
+    public static final PluginConfigSpec<String> TOPIC_PREFIX_CONFIG = PluginConfigSpec.stringSetting("topic_prefix", "#logstash");
+
+    public static final PluginConfigSpec<Boolean> INCLUDE_METADATA_CONFIG = PluginConfigSpec.booleanSetting("include_metadata", false);
 
     public static final List<PluginConfigSpec<?>> CONFIG_OPTIONS = new ArrayList<>();
     static {
@@ -53,18 +55,18 @@ public class Solace implements Output {
         CONFIG_OPTIONS.add(PASSWORD_CONFIG);
         CONFIG_OPTIONS.add(TOPIC_CONFIG);
         CONFIG_OPTIONS.add(TOPIC_PREFIX_CONFIG);
+        CONFIG_OPTIONS.add(INCLUDE_METADATA_CONFIG);
     }
 
     
-    private final String id;
-    private final Configuration config;
-    private final CountDownLatch done = new CountDownLatch(1);
-    private volatile boolean stopped = false;
+    protected final String id;
+    protected final Configuration config;
+    protected final CountDownLatch done = new CountDownLatch(1);
+    protected volatile boolean stopped = false;
     
     //private final JsonBuilderFactory factory = Json.createBuilderFactory(null);
-    private JCSMPSession session;
-    //private final XMLMessageProducer producer;
-    private StringBuilder sb = new StringBuilder();
+    protected JCSMPSession session = null;
+    protected XMLMessageProducer producer = null;
     
     private final SessionEventHandler sessionEventHandler = new SessionEventHandler() {
         @Override
@@ -100,7 +102,8 @@ public class Solace implements Output {
         this.id = id;
         this.config = config;
         //prefix = config.get(PREFIX_CONFIG);
-        
+        // TESTTTTT!!
+        StringBuilder sb = new StringBuilder();
         for (String key : config.allKeys()) {
             //sb.append(String.format("%s:%s, ",key,config.get(key)));
             sb.append(String.format("%s, ",key));
@@ -148,25 +151,38 @@ public class Solace implements Output {
 
     }
  */
+    
+    
+    
+    protected String getTopic(Event event) {
+        String topic = config.get(TOPIC_CONFIG);
+        if (event.includes("[@metadata][solace_topic]")) {
+            topic += "/" +event.getMetadata().get("solace_topic");
+        }
+        return topic;
+    }
+    
+    
     @Override
     public void output(final Collection<Event> events) {
         TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);  // can reuse later
         Iterator<Event> iter = events.iterator();
         try {
             session.connect();
-            final XMLMessageProducer producer = session.getMessageProducer(pubHandler);
+            producer = session.getMessageProducer(pubHandler);
             while (iter.hasNext() && !stopped) {
                 Event event = iter.next();
                 // here is where we have whatevver custom logic we want to build outbound Solace messages from our Logstash event
                 
                 JsonObjectBuilder jsonBuilder = Json.createObjectBuilder();
                 
-                StringBuilder sb = new StringBuilder();
-                for (String key : event.getMetadata().keySet()) {
-                    sb.append(key).append(':').append(event.getMetadata().get(key)).append(", ");
+                if (config.get(INCLUDE_METADATA_CONFIG)) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String key : event.getMetadata().keySet()) {
+                        sb.append(key).append(':').append(event.getMetadata().get(key)).append(", ");
+                    }
+                    jsonBuilder.add("@metadata", sb.toString());
                 }
-                jsonBuilder.add("theMetadata", sb.toString());
-                
                 Map<String,Object> map = event.getData();
                 for (String key : map.keySet()) {
                     Object val = event.getField(key);
@@ -193,54 +209,14 @@ public class Solace implements Output {
                         //jsonBuilder.add(key,String.format("%s (%s)",val,val.getClass().getName()));
                     }
                 }
-                JsonObjectBuilder job = Json.createObjectBuilder().add("nestedString", "here I am");
-                jsonBuilder.add("nested", job);
+                //JsonObjectBuilder job = Json.createObjectBuilder().add("nestedString", "this is a test");
+                //jsonBuilder.add("nested", job);
                 
-                //message.setText(sb.toString()+"                                "+jsonBuilder.build().toString()+"     "+sb.toString());
-                message.setText(jsonBuilder.build().toString());
-                //message.setText(event.toJson());
-                String topic = config.get(TOPIC_CONFIG);
-                if (event.includes("[@metadata][solace-topic]")) {
-                    topic += "/" +event.getMetadata().get("solace-topic");
-                    //System.out.println("AARON metadata includes topic!");
-                }
-                // if (event.getField("solace-topic") != null) {
-                //     topic = event.getField("solace-topic").toString();
-                // }
-
                 message.setSenderTimestamp(event.getEventTimestamp().toEpochMilli());
-                
-                
-                // This code below builds a custom topic for publishing when Logstash is configured to receive Solace broker logs via Syslog                
-/*                if (event.getField("scope").equals("SYSTEM")) {
-                    topic = String.format("logstash/%s/SYSTEM/%s/%s",
-                        event.getField("severity_label"),
-                        event.getField("logsource"),
-                        event.getField("event")
-                        );
-                } else if (event.getField("scope").equals("VPN")) {
-                    topic = String.format("logstash/%s/VPN/%s/%s/%s",
-                            event.getField("severity_label"),
-                            event.getField("logsource"),
-                            event.getField("event"),
-                            event.getField("vpn")
-                            );
-                } else {
-                    topic = String.format("logstash/%s/CLIENT/%s/%s/%s/%s",
-                            event.getField("severity_label"),
-                            event.getField("logsource"),
-                            event.getField("event"),
-                            event.getField("vpn"),
-                            event.getField("client")
-                            );
-                }
-
-
-*/              
-
-                
+                message.setText(jsonBuilder.build().toString());
+                String topic = getTopic(event);
                 producer.send(message,JCSMPFactory.onlyInstance().createTopic(topic));
-                message.reset();
+                message.reset();  // reuse the same message object for performance
             }
         } catch (JCSMPException e) {
             System.out.println("Thrown exception during publish");
@@ -250,7 +226,7 @@ public class Solace implements Output {
 
     @Override
     public void stop() {
-        session.closeSession();
+        if (session != null) session.closeSession();
         stopped = true;
         done.countDown();
     }
